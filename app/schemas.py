@@ -21,3 +21,28 @@ class LocationResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class WindConditions(BaseModel):
+    speed_mps: float
+    direction_degrees: float | None
+    gust_mps: float | None
+
+class TimeWindow(BaseModel):
+    begin: datetime | None
+    end: datetime | None
+
+
+class SunConditions(BaseModel):
+    sunrise: datetime | None
+    sunset: datetime | None
+    timezone: str
+    golden_hour_morning: TimeWindow
+    golden_hour_evening: TimeWindow
+    blue_hour_morning: TimeWindow
+    blue_hour_evening: TimeWindow
+
+class FlightConditions(BaseModel):
+    location: LocationResponse
+    wind: WindConditions | None
+    weather_available: bool
+    sun: SunConditions
