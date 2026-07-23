@@ -105,6 +105,7 @@ uploads_directory.mkdir(parents=True, exist_ok=True)
 legal_templates_directory = project_directory / "app" / "templates"
 
 MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024
+MAX_PHOTO_PIXELS = 50_000_000
 ALLOWED_IMAGE_FORMATS = {
     "JPEG": (".jpg", "image/jpeg"),
     "PNG": (".png", "image/png"),
@@ -155,6 +156,12 @@ def normalize_uploaded_image(
                         "are allowed. "
                         f"Detected format: {detected_format}"
                     ),
+                )
+
+            if image.width * image.height > MAX_PHOTO_PIXELS:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail="Image dimensions must not exceed 50 megapixels",
                 )
 
             image.load()
@@ -1006,15 +1013,62 @@ def update_location(
     "/locations/{location_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_location(
+async def delete_location(
     location_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
     location = get_owned_location(location_id, current_user, db)
+    location_directory = (
+        uploads_directory
+        / "locations"
+        / str(location_id)
+    )
+    staged_directory: Path | None = None
+
+    if location_directory.exists():
+        staged_directory = location_directory.with_name(
+            f".location-{location_id}-{uuid4().hex}.deleting"
+        )
+
+        try:
+            location_directory.replace(staged_directory)
+        except OSError as error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not prepare location photos for deletion",
+            ) from error
 
     db.delete(location)
-    db.commit()
+
+    try:
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+
+        if (
+            staged_directory is not None
+            and staged_directory.exists()
+            and not location_directory.exists()
+        ):
+            staged_directory.replace(location_directory)
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not delete location",
+        ) from error
+
+    if staged_directory is not None:
+        try:
+            await asyncio.to_thread(
+                shutil.rmtree,
+                staged_directory,
+            )
+        except OSError:
+            logger.exception(
+                "Could not remove deleted location photo directory %s",
+                staged_directory,
+            )
 
 @app.get(
     "/locations/{location_id}/weather",
