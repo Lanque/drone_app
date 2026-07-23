@@ -22,6 +22,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -55,6 +56,8 @@ from app.security import (
     verify_password,
 )
 
+register_heif_opener(thumbnails=False)
+
 COOKIE_SECURE = (
     os.getenv("COOKIE_SECURE", "false").strip().lower()
     in {"1", "true", "yes", "on"}
@@ -85,6 +88,7 @@ ALLOWED_IMAGE_FORMATS = {
     "PNG": (".png", "image/png"),
     "WEBP": (".webp", "image/webp"),
 }
+PHONE_IMAGE_FORMATS = {"HEIF", "HEIC"}
 
 
 def build_photo_response(photo: LocationPhoto) -> LocationPhotoResponse:
@@ -478,10 +482,29 @@ async def upload_location_photo(
             detail="Uploaded file is not a valid image",
         ) from error
 
+    if image_format in PHONE_IMAGE_FORMATS:
+        try:
+            with Image.open(BytesIO(contents)) as image:
+                converted_image = image.convert("RGB")
+                converted_bytes = BytesIO()
+                converted_image.save(
+                    converted_bytes,
+                    format="JPEG",
+                    quality=90,
+                    optimize=True,
+                )
+                contents = converted_bytes.getvalue()
+                image_format = "JPEG"
+        except OSError as error:
+            raise HTTPException(
+                status_code=400,
+                detail="HEIC image could not be converted",
+            ) from error
+
     if image_format not in ALLOWED_IMAGE_FORMATS:
         raise HTTPException(
             status_code=400,
-            detail="Only JPEG, PNG and WebP images are allowed",
+            detail="Only JPEG, PNG, WebP and HEIC images are allowed",
         )
 
     extension, content_type = ALLOWED_IMAGE_FORMATS[image_format]

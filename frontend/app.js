@@ -259,6 +259,7 @@ function formatTime(timestamp) {
 function openPanel(view) {
   workspace.classList.add("is-panel-open");
   const isFormView = view === "form";
+  sidePanel.classList.toggle("side-panel--form", isFormView);
   locationsView.hidden = isFormView;
   formView.hidden = !isFormView;
   panelTitle.textContent = isFormView
@@ -507,7 +508,12 @@ async function uploadLocationPhoto(locationId, file, caption) {
   });
 
   if (!response.ok) {
-    throw new Error("Pildi üleslaadimine ebaõnnestus.");
+    throw new Error(
+      await getApiError(
+        response,
+        "Pildi üleslaadimine ebaõnnestus.",
+      ),
+    );
   }
 
   return response.json();
@@ -680,7 +686,7 @@ function createPhotoUploadForm(location, galleryContainer, onLayoutChange) {
 
   form.className = "photo-upload-form";
   fileInput.type = "file";
-  fileInput.accept = "image/jpeg,image/png,image/webp";
+  fileInput.accept = "image/*,.heic,.heif";
   fileInput.required = true;
   fileInput.setAttribute("aria-label", "Vali pildifail");
   captionInput.type = "text";
@@ -711,7 +717,7 @@ function createPhotoUploadForm(location, galleryContainer, onLayoutChange) {
       showToast("Pilt lisati võttepaigale.");
     } catch (error) {
       console.error(error);
-      status.textContent = "Pildi üleslaadimine ebaõnnestus.";
+      status.textContent = error.message;
     } finally {
       submitButton.disabled = false;
     }
