@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,11 @@ from app.security import (
     verify_password,
 )
 
+COOKIE_SECURE = (
+    os.getenv("COOKIE_SECURE", "false").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
+
 app = FastAPI(
     title="Drone Locations API",
     version="0.1.0",
@@ -64,7 +70,7 @@ app.add_middleware(
     session_cookie="oauth_state",
     max_age=10 * 60,
     same_site="lax",
-    https_only=False,
+    https_only=COOKIE_SECURE,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,7 +120,7 @@ def set_access_token_cookie(
         key="access_token",
         value=create_access_token(user_id),
         httponly=True,
-        secure=False,
+        secure=COOKIE_SECURE,
         samesite="lax",
         max_age=60 * 60,
         path="/",
@@ -190,7 +196,7 @@ def logout_user(response: Response) -> None:
         key="access_token",
         path="/",
         httponly=True,
-        secure=False,
+        secure=COOKIE_SECURE,
         samesite="lax",
     )
 
