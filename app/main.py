@@ -110,6 +110,7 @@ ALLOWED_IMAGE_FORMATS = {
     "PNG": (".png", "image/png"),
     "WEBP": (".webp", "image/webp"),
 }
+JPEG_INPUT_FORMATS = {"JPEG", "MPO"}
 PHONE_IMAGE_FORMATS = {"HEIF", "HEIC"}
 
 
@@ -142,14 +143,17 @@ def normalize_uploaded_image(
             image_format = image.format
 
             if (
-                image_format not in ALLOWED_IMAGE_FORMATS
+                image_format not in JPEG_INPUT_FORMATS
+                and image_format not in ALLOWED_IMAGE_FORMATS
                 and image_format not in PHONE_IMAGE_FORMATS
             ):
+                detected_format = image_format or "unknown"
                 raise HTTPException(
                     status_code=400,
                     detail=(
                         "Only JPEG, PNG, WebP and HEIC images "
-                        "are allowed"
+                        "are allowed. "
+                        f"Detected format: {detected_format}"
                     ),
                 )
 
@@ -157,7 +161,10 @@ def normalize_uploaded_image(
             normalized_image = ImageOps.exif_transpose(image)
             output_format = (
                 "JPEG"
-                if image_format in PHONE_IMAGE_FORMATS
+                if (
+                    image_format in JPEG_INPUT_FORMATS
+                    or image_format in PHONE_IMAGE_FORMATS
+                )
                 else image_format
             )
             output = BytesIO()
