@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Filmivõtete asukohtade, ilma ja parimate valgusaegade planeerija."
-    />
-    <title>FrameScout — võttepaikade planeerija</title>
+    <meta name="description" content="Filmivõtete asukohtade planeerija." />
+    <title>FrameScout</title>
 
     <link
       rel="stylesheet"
@@ -16,7 +13,6 @@
       crossorigin=""
     />
     <link rel="stylesheet" href="/styles.css" />
-
     <script
       defer
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -27,128 +23,118 @@
   </head>
 
   <body>
-    <header class="topbar">
+    <header class="appbar">
       <a class="brand" href="/" aria-label="FrameScout avaleht">
         <span class="brand__mark" aria-hidden="true">FS</span>
-        <span>
-          <strong>FrameScout</strong>
-          <small>Location planning</small>
-        </span>
+        <strong>FrameScout</strong>
       </a>
-
-      <div class="topbar__meta">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span id="location-count">Laadin võttepaiku...</span>
-      </div>
+      <span id="location-count" class="location-count">Laadin...</span>
     </header>
 
-    <main class="workspace">
+    <main id="workspace" class="workspace">
       <section class="map-panel" aria-label="Võttepaikade kaart">
-        <div class="map-guide">
-          <span class="map-guide__step">01</span>
-          <span>
-            <strong>Vali kaadrikoht</strong>
-            <small>Kliki kaardil ja lohista marker täpseks</small>
-          </span>
-        </div>
         <div id="map"></div>
+
+        <nav class="map-actions" aria-label="Kaardi tööriistad">
+          <button id="show-locations" type="button">Asukohad</button>
+          <button id="start-add-mode" type="button">+ Lisa</button>
+        </nav>
+
+        <div id="selection-hint" class="selection-hint" hidden>
+          <strong>Vali võttepaik kaardilt</strong>
+          <button id="cancel-map-selection" type="button">Tühista</button>
+        </div>
       </section>
 
-      <aside class="scout-panel">
-        <div class="panel-heading">
-          <p class="eyebrow">Location scout</p>
-          <h1>Salvesta võttepaik</h1>
-          <p>
-            Märgi asukoht, lisa produktsioonimärkmed ning kontrolli tuult ja
-            parimaid valgusaegu.
-          </p>
-        </div>
-
-        <p id="selected-location" class="selection-card" role="status">
-          <span class="selection-card__icon" aria-hidden="true">+</span>
-          <span>Vali esmalt asukoht kaardil.</span>
-        </p>
-
-        <form id="location-form">
-          <input id="latitude" name="latitude" type="hidden" />
-          <input id="longitude" name="longitude" type="hidden" />
-
-          <div class="field">
-            <label for="name">Võttepaiga nimi</label>
-            <input
-              id="name"
-              name="name"
-              minlength="2"
-              maxlength="120"
-              placeholder="Näiteks Kopli liinide sisehoov"
-              autocomplete="off"
-              required
-            />
-          </div>
-
-          <div class="field">
-            <label for="description">Produktsioonimärkmed</label>
-            <textarea
-              id="description"
-              name="description"
-              maxlength="2000"
-              placeholder="Ligipääs, parkimine, heli, valgus, võttenurgad..."
-            ></textarea>
-          </div>
-
-          <label class="check-row" for="no-fly-zone-status">
-            <input
-              id="no-fly-zone-status"
-              name="no-fly-zone-status"
-              type="checkbox"
-            />
-            <span>
-              <strong>Õhuruum vajab lisakontrolli</strong>
-              <small>Asjakohane ainult drooni kasutamisel</small>
-            </span>
-          </label>
-
-          <details class="coordinate-details">
-            <summary>Koordinaadid käsitsi</summary>
-            <div class="coordinate-grid">
-              <div class="field">
-                <label for="latitude-manual">Laiuskraad</label>
-                <input
-                  id="latitude-manual"
-                  type="number"
-                  min="-90"
-                  max="90"
-                  step="0.000001"
-                />
-              </div>
-              <div class="field">
-                <label for="longitude-manual">Pikkuskraad</label>
-                <input
-                  id="longitude-manual"
-                  type="number"
-                  min="-180"
-                  max="180"
-                  step="0.000001"
-                />
-              </div>
-            </div>
-          </details>
-
-          <button class="primary-button" type="submit">
-            Salvesta võttepaik
+      <aside id="side-panel" class="side-panel" aria-label="Võttepaikade paneel">
+        <header class="panel-header">
+          <h1 id="panel-title">Asukohad</h1>
+          <button id="close-panel" class="close-button" type="button" aria-label="Sulge paneel">
+            ×
           </button>
-          <p id="form-status" class="form-status" role="status"></p>
-        </form>
+        </header>
 
-        <footer class="panel-footer">
-          Ilmaandmed OpenWeatherilt ·
-          <a href="https://sunrise-sunset.org" target="_blank" rel="noreferrer">
-            valgusajad Sunrise-Sunset.org-ist
-          </a>
-        </footer>
+        <section id="locations-view">
+          <div id="locations-list" class="locations-list"></div>
+        </section>
+
+        <section id="form-view" hidden>
+          <p id="selected-location" class="selection-status" role="status">
+            Vali asukoht kaardil.
+          </p>
+
+          <form id="location-form">
+            <input id="latitude" name="latitude" type="hidden" />
+            <input id="longitude" name="longitude" type="hidden" />
+
+            <div class="field">
+              <label for="name">Võttepaiga nimi</label>
+              <input
+                id="name"
+                name="name"
+                minlength="2"
+                maxlength="120"
+                placeholder="Näiteks Kopli liinide sisehoov"
+                autocomplete="off"
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="description">Produktsioonimärkmed</label>
+              <textarea
+                id="description"
+                name="description"
+                maxlength="2000"
+                placeholder="Ligipääs, parkimine, heli, valgus..."
+              ></textarea>
+            </div>
+
+            <label class="check-row" for="no-fly-zone-status">
+              <input id="no-fly-zone-status" name="no-fly-zone-status" type="checkbox" />
+              <span>
+                <strong>Õhuruum vajab lisakontrolli</strong>
+                <small>Ainult drooni kasutamisel</small>
+              </span>
+            </label>
+
+            <details class="coordinate-details">
+              <summary>Koordinaadid käsitsi</summary>
+              <div class="coordinate-grid">
+                <div class="field">
+                  <label for="latitude-manual">Laiuskraad</label>
+                  <input id="latitude-manual" type="number" min="-90" max="90" step="0.000001" />
+                </div>
+                <div class="field">
+                  <label for="longitude-manual">Pikkuskraad</label>
+                  <input id="longitude-manual" type="number" min="-180" max="180" step="0.000001" />
+                </div>
+              </div>
+            </details>
+
+            <button class="save-button" type="submit">Salvesta</button>
+            <p id="form-status" class="form-status" role="status"></p>
+          </form>
+        </section>
       </aside>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <dialog id="photo-viewer" class="photo-viewer" aria-labelledby="photo-viewer-caption">
+      <button id="close-photo-viewer" class="photo-viewer__close" type="button" aria-label="Sulge pildivaatur">
+        ×
+      </button>
+      <button id="previous-photo" class="photo-viewer__navigation" type="button" aria-label="Eelmine pilt">
+        ←
+      </button>
+      <figure class="photo-viewer__figure">
+        <img id="photo-viewer-image" alt="" />
+        <figcaption id="photo-viewer-caption"></figcaption>
+      </figure>
+      <button id="next-photo" class="photo-viewer__navigation" type="button" aria-label="Järgmine pilt">
+        →
+      </button>
+    </dialog>
   </body>
 </html>

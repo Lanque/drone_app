@@ -10,6 +10,12 @@ class LocationCreate(BaseModel):
     description: str | None = Field(default=None, max_length=2_000)
     no_fly_zone_status: bool = False
 
+class LocationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    description: str | None = Field(default=None, max_length=2_000)
+    no_fly_zone_status: bool | None = None
 
 class LocationResponse(BaseModel):
     id: int
@@ -21,6 +27,18 @@ class LocationResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LocationPhotoResponse(BaseModel):
+    id: int
+    location_id: int
+    original_name: str
+    content_type: str
+    size_bytes: int
+    caption: str | None
+    url: str
+    created_at: datetime
+
 
 class WindConditions(BaseModel):
     speed_mps: float
