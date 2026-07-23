@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
     display_name VARCHAR(120) NOT NULL,
     password_hash VARCHAR(255),
     google_subject VARCHAR(255),
+    terms_accepted_at TIMESTAMPTZ,
+    terms_version VARCHAR(20),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Filmivõtete asukohtade planeerija." />
     <title>FrameScout</title>
+    <link rel="icon" href="/assets/framescout-mark.svg" type="image/svg+xml" />
 
     <link
       rel="stylesheet"
@@ -12,14 +13,14 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="/styles.css?v=mobile-photo-1" />
+    <link rel="stylesheet" href="/styles.css?v=legal-1" />
     <script
       defer
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script defer src="/app.js?v=mobile-photo-1"></script>
+    <script defer src="/app.js?v=legal-1"></script>
   </head>
 
   <body>
@@ -41,7 +42,7 @@
         </button>
 
         <a class="brand auth-brand" href="/" aria-label="FrameScout avaleht">
-          <span class="brand__mark" aria-hidden="true">FS</span>
+          <img class="brand__mark" src="/assets/framescout-mark.svg" alt="" />
           <strong>FrameScout</strong>
         </a>
 
@@ -87,6 +88,25 @@
             />
           </div>
 
+          <label
+            id="auth-terms-field"
+            class="auth-terms-field"
+            for="auth-accepted-terms"
+            hidden
+          >
+            <input
+              id="auth-accepted-terms"
+              name="accepted_terms"
+              type="checkbox"
+            />
+            <span>
+              Nõustun
+              <a href="/terms" target="_blank" rel="noreferrer">kasutustingimustega</a>
+              ja olen tutvunud
+              <a href="/privacy" target="_blank" rel="noreferrer">andmekaitsetingimustega</a>.
+            </span>
+          </label>
+
           <button id="auth-submit" class="save-button" type="submit">
             Logi sisse
           </button>
@@ -96,19 +116,30 @@
         <div class="auth-divider"><span>või</span></div>
 
         <button id="google-login-button" class="google-login-button" type="button">
-          <span class="google-mark" aria-hidden="true">G</span>
+          <img
+            class="google-mark"
+            src="/assets/google-sign-in.png"
+            alt=""
+          />
           Jätka Google'iga
         </button>
 
         <button id="toggle-auth-mode" class="auth-mode-button" type="button">
           Loo uus konto
         </button>
+
+        <p class="auth-legal-copy">
+          Jätkates nõustud
+          <a href="/terms" target="_blank" rel="noreferrer">kasutustingimustega</a>
+          ja kinnitad, et oled tutvunud
+          <a href="/privacy" target="_blank" rel="noreferrer">andmekaitsetingimustega</a>.
+        </p>
       </div>
     </section>
 
     <header class="appbar">
       <a class="brand" href="/" aria-label="FrameScout avaleht">
-        <span class="brand__mark" aria-hidden="true">FS</span>
+        <img class="brand__mark" src="/assets/framescout-mark.svg" alt="" />
         <strong>FrameScout</strong>
       </a>
 
@@ -120,6 +151,9 @@
       <div id="user-actions" class="appbar__account" hidden>
         <span id="current-user-name" class="current-user-name"></span>
         <span id="location-count" class="location-count">Laadin...</span>
+        <button id="account-button" class="account-button" type="button">
+          Konto
+        </button>
         <button id="logout-button" class="logout-button" type="button">
           Logi välja
         </button>
@@ -215,6 +249,59 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <dialog id="account-dialog" class="account-dialog" aria-labelledby="account-title">
+      <header class="account-dialog__header">
+        <div>
+          <p class="account-dialog__kicker">Konto</p>
+          <h2 id="account-title">Sinu FrameScouti andmed</h2>
+        </div>
+        <button
+          id="close-account-dialog"
+          class="close-button"
+          type="button"
+          aria-label="Sulge konto menüü"
+        >
+          ×
+        </button>
+      </header>
+
+      <p id="account-email" class="account-dialog__email"></p>
+
+      <section class="account-section">
+        <h3>Andmete koopia</h3>
+        <p>
+          Laadi alla ZIP-fail konto, võttepaikade, märkmete ja fotodega.
+        </p>
+        <a class="account-action-link" href="/auth/export">
+          Laadi minu andmed alla
+        </a>
+      </section>
+
+      <section class="account-section">
+        <h3>Privaatsus ja tingimused</h3>
+        <p>
+          Loe, milliseid andmeid FrameScout töötleb ja millised reeglid
+          teenuse kasutamisel kehtivad.
+        </p>
+        <div class="account-legal-links">
+          <a href="/privacy" target="_blank" rel="noreferrer">Andmekaitsetingimused</a>
+          <a href="/terms" target="_blank" rel="noreferrer">Kasutustingimused</a>
+        </div>
+      </section>
+
+      <section class="account-section account-danger-zone">
+        <h3>Kustuta konto</h3>
+        <p>
+          See eemaldab jäädavalt konto, kõik võttepaigad ja üleslaaditud
+          fotod. Toimingut ei saa tagasi võtta.
+        </p>
+        <button id="delete-account-button" type="button">
+          Kustuta minu konto
+        </button>
+        <p id="account-status" class="form-status" role="status"></p>
+      </section>
+    </dialog>
 
     <dialog id="photo-viewer" class="photo-viewer" aria-labelledby="photo-viewer-caption">
       <button id="close-photo-viewer" class="photo-viewer__close" type="button" aria-label="Sulge pildivaatur">

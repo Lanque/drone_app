@@ -28,6 +28,8 @@ const authNameField = document.querySelector("#auth-name-field");
 const authDisplayNameInput = document.querySelector("#auth-display-name");
 const authEmailInput = document.querySelector("#auth-email");
 const authPasswordInput = document.querySelector("#auth-password");
+const authTermsField = document.querySelector("#auth-terms-field");
+const authAcceptedTermsInput = document.querySelector("#auth-accepted-terms");
 const authSubmitButton = document.querySelector("#auth-submit");
 const authStatus = document.querySelector("#auth-status");
 const toggleAuthModeButton = document.querySelector("#toggle-auth-mode");
@@ -38,6 +40,7 @@ const userActions = document.querySelector("#user-actions");
 const openLoginButton = document.querySelector("#open-login");
 const openRegisterButton = document.querySelector("#open-register");
 const currentUserName = document.querySelector("#current-user-name");
+const accountButton = document.querySelector("#account-button");
 const logoutButton = document.querySelector("#logout-button");
 const workspace = document.querySelector("#workspace");
 const mapPanel = document.querySelector(".map-panel");
@@ -69,6 +72,11 @@ const photoViewerCaption = document.querySelector("#photo-viewer-caption");
 const closePhotoViewerButton = document.querySelector("#close-photo-viewer");
 const previousPhotoButton = document.querySelector("#previous-photo");
 const nextPhotoButton = document.querySelector("#next-photo");
+const accountDialog = document.querySelector("#account-dialog");
+const closeAccountDialogButton = document.querySelector("#close-account-dialog");
+const accountEmail = document.querySelector("#account-email");
+const deleteAccountButton = document.querySelector("#delete-account-button");
+const accountStatus = document.querySelector("#account-status");
 
 
 function createTextElement(tagName, text, className = "") {
@@ -103,6 +111,13 @@ function setAuthMode(mode) {
     : "Sinu võttepaigad, fotod ja võtteolud ühes kohas.";
   authNameField.hidden = !isRegistration;
   authDisplayNameInput.required = isRegistration;
+  authTermsField.hidden = !isRegistration;
+  authAcceptedTermsInput.required = isRegistration;
+
+  if (!isRegistration) {
+    authAcceptedTermsInput.checked = false;
+  }
+
   authPasswordInput.autocomplete = isRegistration
     ? "new-password"
     : "current-password";
@@ -147,6 +162,7 @@ async function login(email, password) {
 async function showAuthenticatedApp(user) {
   authenticatedUser = user;
   currentUserName.textContent = user.display_name;
+  accountEmail.textContent = user.email;
   guestActions.hidden = true;
   userActions.hidden = false;
   authScreen.hidden = true;
@@ -184,6 +200,10 @@ function showLoggedOutApp() {
   closePanel();
   setAuthMode("login");
   authPasswordInput.value = "";
+
+  if (accountDialog.open) {
+    accountDialog.close();
+  }
 }
 
 
@@ -982,6 +1002,7 @@ authForm.addEventListener("submit", async (event) => {
           email,
           display_name: authDisplayNameInput.value.trim(),
           password,
+          accepted_terms: authAcceptedTermsInput.checked,
         }),
       });
 
@@ -1018,6 +1039,60 @@ logoutButton.addEventListener("click", async () => {
   } finally {
     logoutButton.disabled = false;
     showLoggedOutApp();
+  }
+});
+
+
+accountButton.addEventListener("click", () => {
+  accountStatus.textContent = "";
+  accountDialog.showModal();
+});
+
+closeAccountDialogButton.addEventListener("click", () => {
+  accountDialog.close();
+});
+
+accountDialog.addEventListener("click", (event) => {
+  if (event.target === accountDialog) {
+    accountDialog.close();
+  }
+});
+
+deleteAccountButton.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Kas kustutada jäädavalt sinu konto, kõik võttepaigad ja fotod?",
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  deleteAccountButton.disabled = true;
+  accountStatus.textContent = "Kustutan kontot...";
+
+  try {
+    const response = await fetch("/auth/account", {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await getApiError(
+          response,
+          "Konto kustutamine ebaõnnestus.",
+        ),
+      );
+    }
+
+    accountDialog.close();
+    showLoggedOutApp();
+    showToast("Konto ja sellega seotud andmed kustutati.");
+  } catch (error) {
+    console.error(error);
+    accountStatus.textContent = error.message;
+  } finally {
+    deleteAccountButton.disabled = false;
   }
 });
 

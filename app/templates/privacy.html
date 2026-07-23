@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="et">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="FrameScouti andmekaitsetingimused." />
+    <title>Andmekaitsetingimused – FrameScout</title>
+    <link rel="icon" href="/assets/framescout-mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/legal.css?v=legal-1" />
+  </head>
+  <body>
+    <header class="legal-header">
+      <a class="legal-brand" href="/">
+        <img src="/assets/framescout-mark.svg" alt="" />
+        <strong>FrameScout</strong>
+      </a>
+      <a href="/">Tagasi kaardile</a>
+    </header>
+
+    <main class="legal-document">
+      <p class="legal-kicker">Versioon {{TERMS_VERSION}}</p>
+      <h1>Andmekaitsetingimused</h1>
+      <p class="legal-lead">
+        Siin selgitame, milliseid isikuandmeid FrameScout töötleb,
+        milleks neid kasutatakse ja millised õigused sul on.
+      </p>
+
+      <section>
+        <h2>1. Vastutav töötleja</h2>
+        <p>
+          Vastutav töötleja on <strong>{{CONTROLLER_NAME}}</strong>.
+          Andmekaitsega seotud küsimuste kontakt:
+          <strong>{{CONTACT_EMAIL}}</strong>.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. Töödeldavad andmed ja eesmärgid</h2>
+        <div class="legal-table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Andmed</th>
+                <th>Eesmärk</th>
+                <th>Õiguslik alus</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Nimi, e-post, parooliräsi või Google’i konto tunnus</td>
+                <td>Konto loomine, autentimine ja kasutajate eristamine</td>
+                <td>Teenuse osutamine ja kasutustingimuste täitmine</td>
+              </tr>
+              <tr>
+                <td>Võttepaigad, koordinaadid, märkmed ja fotod</td>
+                <td>Kasutaja soovitud võttepaikade haldamine</td>
+                <td>Teenuse osutamine</td>
+              </tr>
+              <tr>
+                <td>IP-aadress, päringu aeg ja tehnilised serverilogid</td>
+                <td>Turvalisus, rikete leidmine ja kuritarvituste vältimine</td>
+                <td>Õigustatud huvi hoida teenus turvaline ja töökindel</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Parooli ennast ei salvestata. Salvestatakse ainult Argon2 abil
+          loodud parooliräsi. FrameScout ei tee automatiseeritud otsuseid
+          ega profiilianalüüsi.
+        </p>
+      </section>
+
+      <section>
+        <h2>3. Välised teenused ja andmete saajad</h2>
+        <p>Rakenduse toimimiseks kasutatakse järgmisi teenuseid:</p>
+        <ul>
+          <li>Google OpenID Connect – vabatahtlik Google’iga sisselogimine;</li>
+          <li>OpenStreetMap – kaardipiltide kuvamine;</li>
+          <li>OpenWeather – koordinaadipõhised ilmaandmed;</li>
+          <li>Sunrise-Sunset – koordinaadipõhised valgusajad;</li>
+          <li>Tailscale Funnel – turvaline HTTPS-ühendus avaliku internetiga;</li>
+          <li>UNPKG – Leafleti brauserifailide edastamine.</li>
+        </ul>
+        <p>
+          Väliste teenuste kasutamisel võivad teenusepakkujad saada
+          tehnilisi ühendusandmeid. Google’ile edastatakse sisselogimise
+          andmed ainult siis, kui valid Google’iga sisselogimise.
+          OpenWeatherile ja Sunrise-Sunsetile saadetakse võttepaiga
+          koordinaadid serveri kaudu, mitte sinu kontoandmeid.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Küpsised</h2>
+        <p>
+          FrameScout kasutab ainult teenuse toimimiseks vajalikke küpsiseid
+          ega kasuta analüütika- või reklaamiküpsiseid.
+        </p>
+        <div class="legal-table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Küpsis</th>
+                <th>Eesmärk</th>
+                <th>Kestus</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>access_token</code></td>
+                <td>Sisselogitud kasutaja turvaline tuvastamine</td>
+                <td>Kuni 1 tund</td>
+              </tr>
+              <tr>
+                <td><code>oauth_state</code></td>
+                <td>Google’i sisselogimise kaitsmine võltsitud päringute eest</td>
+                <td>Kuni 10 minutit</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Need küpsised on kasutaja soovitud sisselogimisteenuse jaoks
+          hädavajalikud. Nende blokeerimisel ei saa kontole sisse logida.
+        </p>
+      </section>
+
+      <section>
+        <h2>5. Säilitamine ja kustutamine</h2>
+        <p>
+          Konto, võttepaiku ja fotosid säilitatakse kuni konto kustutamiseni
+          või kuni kasutaja kustutab vastava sisu. Turvalisuse ja veaotsingu
+          logisid säilitatakse ainult nii kaua, kui see on teenuse
+          haldamiseks vajalik. Konto kustutamisel eemaldatakse kontoga seotud
+          võttepaigad ja fotod.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Sinu õigused</h2>
+        <p>Sul on tingimustest sõltuvalt õigus:</p>
+        <ul>
+          <li>saada teavet enda andmete töötlemise kohta;</li>
+          <li>saada koopia enda andmetest;</li>
+          <li>parandada ebaõigeid andmeid;</li>
+          <li>kustutada konto ja sellega seotud andmed;</li>
+          <li>piirata töötlemist või esitada sellele vastuväiteid;</li>
+          <li>esitada kaebus Andmekaitse Inspektsioonile.</li>
+        </ul>
+        <p>
+          Konto andmed saad ZIP-failina alla laadida konto menüüst.
+          Õiguste kasutamiseks kirjuta kontaktile
+          <strong>{{CONTACT_EMAIL}}</strong>.
+        </p>
+        <p>
+          Eesti järelevalveasutus:
+          <a href="https://www.aki.ee/" rel="noreferrer">Andmekaitse Inspektsioon</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Turvalisus</h2>
+        <p>
+          Rakendus kasutab HTTPS-i, HttpOnly ja Secure küpsiseid,
+          paroolide tugevat räsimist ning kasutajapõhist ligipääsukontrolli.
+          Üleslaaditud fotod töödeldakse uuesti ja neilt eemaldatakse
+          EXIF-metaandmed, sealhulgas võimalik telefoni GPS-info.
+        </p>
+      </section>
+
+      <section>
+        <h2>8. Tingimuste muutmine</h2>
+        <p>
+          Tingimusi võidakse muuta, kui rakenduse funktsioonid või kasutatavad
+          teenused muutuvad. Kehtiv versioon ja kuupäev on näidatud lehe
+          alguses.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

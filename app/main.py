@@ -1,10 +1,17 @@
 import asyncio
+import json
 import logging
 import os
+import shutil
+from collections.abc import Iterator
+from datetime import datetime, timezone
+from html import escape
 from io import BytesIO
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from typing import Any
 from uuid import uuid4
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from authlib.integrations.base_client.errors import OAuthError
 from fastapi import (
@@ -19,9 +26,14 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -62,6 +74,15 @@ COOKIE_SECURE = (
     os.getenv("COOKIE_SECURE", "false").strip().lower()
     in {"1", "true", "yes", "on"}
 )
+TERMS_VERSION = "2026-07-24"
+LEGAL_CONTROLLER_NAME = (
+    os.getenv("LEGAL_CONTROLLER_NAME", "").strip()
+    or "FrameScouti haldaja"
+)
+LEGAL_CONTACT_EMAIL = (
+    os.getenv("LEGAL_CONTACT_EMAIL", "").strip()
+    or "Kontakt ei ole veel seadistatud"
+)
 
 app = FastAPI(
     title="Drone Locations API",
@@ -81,6 +102,7 @@ logger = logging.getLogger(__name__)
 project_directory = Path(__file__).resolve().parent.parent
 uploads_directory = project_directory / "uploads"
 uploads_directory.mkdir(parents=True, exist_ok=True)
+legal_templates_directory = project_directory / "app" / "templates"
 
 MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_IMAGE_FORMATS = {
@@ -89,6 +111,92 @@ ALLOWED_IMAGE_FORMATS = {
     "WEBP": (".webp", "image/webp"),
 }
 PHONE_IMAGE_FORMATS = {"HEIF", "HEIC"}
+
+
+def record_terms_acceptance(user: User) -> None:
+    if user.terms_version == TERMS_VERSION:
+        return
+
+    user.terms_accepted_at = datetime.now(timezone.utc)
+    user.terms_version = TERMS_VERSION
+
+
+def render_legal_page(filename: str) -> HTMLResponse:
+    template = (legal_templates_directory / filename).read_text(
+        encoding="utf-8",
+    )
+    rendered = (
+        template
+        .replace("{{CONTROLLER_NAME}}", escape(LEGAL_CONTROLLER_NAME))
+        .replace("{{CONTACT_EMAIL}}", escape(LEGAL_CONTACT_EMAIL))
+        .replace("{{TERMS_VERSION}}", escape(TERMS_VERSION))
+    )
+    return HTMLResponse(rendered)
+
+
+def normalize_uploaded_image(
+    contents: bytes,
+) -> tuple[bytes, str]:
+    try:
+        with Image.open(BytesIO(contents)) as image:
+            image_format = image.format
+
+            if (
+                image_format not in ALLOWED_IMAGE_FORMATS
+                and image_format not in PHONE_IMAGE_FORMATS
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Only JPEG, PNG, WebP and HEIC images "
+                        "are allowed"
+                    ),
+                )
+
+            image.load()
+            normalized_image = ImageOps.exif_transpose(image)
+            output_format = (
+                "JPEG"
+                if image_format in PHONE_IMAGE_FORMATS
+                else image_format
+            )
+            output = BytesIO()
+
+            if output_format == "JPEG":
+                if normalized_image.mode not in {"RGB", "L"}:
+                    normalized_image = normalized_image.convert("RGB")
+                normalized_image.save(
+                    output,
+                    format="JPEG",
+                    quality=90,
+                    optimize=True,
+                )
+            elif output_format == "PNG":
+                normalized_image.save(
+                    output,
+                    format="PNG",
+                    optimize=True,
+                )
+            else:
+                normalized_image.save(
+                    output,
+                    format="WEBP",
+                    quality=90,
+                    method=6,
+                )
+
+            return output.getvalue(), output_format
+    except HTTPException:
+        raise
+    except (
+        Image.DecompressionBombError,
+        UnidentifiedImageError,
+        OSError,
+    ) as error:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is not a valid image",
+        ) from error
 
 
 def build_photo_response(photo: LocationPhoto) -> LocationPhotoResponse:
@@ -136,6 +244,16 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_notice() -> HTMLResponse:
+    return render_legal_page("privacy.html")
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms_of_use() -> HTMLResponse:
+    return render_legal_page("terms.html")
+
+
 @app.get("/health/database")
 def database_health_check() -> dict[str, str]:
     try:
@@ -175,6 +293,7 @@ def register_user(
         display_name=user_data.display_name.strip(),
         password_hash=hash_password(user_data.password),
     )
+    record_terms_acceptance(user)
 
     db.add(user)
 
@@ -297,6 +416,8 @@ async def google_auth_callback(
     else:
         user.google_subject = google_subject
 
+    record_terms_acceptance(user)
+
     try:
         db.commit()
     except IntegrityError:
@@ -344,6 +465,17 @@ def login_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    record_terms_acceptance(user)
+
+    try:
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not update account terms",
+        ) from error
 
     set_access_token_cookie(response, user.id)
 
@@ -406,6 +538,207 @@ def get_authenticated_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     return current_user
+
+
+@app.get("/auth/export")
+def export_account_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    locations = list(
+        db.scalars(
+            select(Location)
+            .where(Location.owner_id == current_user.id)
+            .order_by(Location.created_at)
+        ).all()
+    )
+
+    export_data: dict[str, Any] = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "display_name": current_user.display_name,
+            "created_at": current_user.created_at.isoformat(),
+            "authentication_provider": (
+                "google"
+                if current_user.google_subject
+                else "password"
+            ),
+            "terms_accepted_at": (
+                current_user.terms_accepted_at.isoformat()
+                if current_user.terms_accepted_at
+                else None
+            ),
+            "terms_version": current_user.terms_version,
+        },
+        "locations": [],
+    }
+
+    archive = SpooledTemporaryFile(
+        max_size=50 * 1024 * 1024,
+        mode="w+b",
+    )
+
+    with ZipFile(
+        archive,
+        mode="w",
+        compression=ZIP_DEFLATED,
+    ) as zip_file:
+        for location in locations:
+            photos = list(
+                db.scalars(
+                    select(LocationPhoto)
+                    .where(
+                        LocationPhoto.location_id == location.id,
+                    )
+                    .order_by(LocationPhoto.created_at)
+                ).all()
+            )
+            photo_data = []
+
+            for photo in photos:
+                photo_data.append(
+                    {
+                        "id": photo.id,
+                        "original_name": photo.original_name,
+                        "content_type": photo.content_type,
+                        "size_bytes": photo.size_bytes,
+                        "caption": photo.caption,
+                        "created_at": photo.created_at.isoformat(),
+                    }
+                )
+                photo_path = get_photo_path(photo)
+
+                if photo_path.is_file():
+                    safe_name = (
+                        Path(photo.original_name).name
+                        .replace("\\", "_")
+                        .replace("/", "_")
+                    )
+                    zip_file.write(
+                        photo_path,
+                        arcname=(
+                            f"photos/location-{location.id}/"
+                            f"{photo.id}-{safe_name}"
+                        ),
+                    )
+
+            export_data["locations"].append(
+                {
+                    "id": location.id,
+                    "name": location.name,
+                    "latitude": float(location.latitude),
+                    "longitude": float(location.longitude),
+                    "description": location.description,
+                    "no_fly_zone_status": (
+                        location.no_fly_zone_status
+                    ),
+                    "created_at": location.created_at.isoformat(),
+                    "photos": photo_data,
+                }
+            )
+
+        zip_file.writestr(
+            "framescout-data.json",
+            json.dumps(
+                export_data,
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
+    archive.seek(0)
+
+    def stream_archive() -> Iterator[bytes]:
+        try:
+            while chunk := archive.read(1024 * 1024):
+                yield chunk
+        finally:
+            archive.close()
+
+    filename = (
+        f"framescout-export-"
+        f"{datetime.now(timezone.utc).date().isoformat()}.zip"
+    )
+    return StreamingResponse(
+        stream_archive(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"'
+            ),
+        },
+    )
+
+
+@app.delete(
+    "/auth/account",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_account(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    location_ids = list(
+        db.scalars(
+            select(Location.id).where(
+                Location.owner_id == current_user.id,
+            )
+        ).all()
+    )
+    locations_root = uploads_directory / "locations"
+    staged_paths: list[tuple[Path, Path]] = []
+
+    try:
+        for location_id in location_ids:
+            original_path = locations_root / str(location_id)
+
+            if not original_path.exists():
+                continue
+
+            staged_path = locations_root / (
+                f".account-{current_user.id}-"
+                f"{location_id}-{uuid4().hex}.deleting"
+            )
+            original_path.replace(staged_path)
+            staged_paths.append((original_path, staged_path))
+
+        db.delete(current_user)
+        db.commit()
+    except (OSError, SQLAlchemyError) as error:
+        db.rollback()
+
+        for original_path, staged_path in reversed(staged_paths):
+            if staged_path.exists() and not original_path.exists():
+                staged_path.replace(original_path)
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not delete account",
+        ) from error
+
+    for _, staged_path in staged_paths:
+        try:
+            await asyncio.to_thread(
+                shutil.rmtree,
+                staged_path,
+            )
+        except OSError:
+            logger.exception(
+                "Could not remove deleted account photo directory %s",
+                staged_path,
+            )
+
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+    )
+
 
 @app.get(
     "/locations",
@@ -472,39 +805,12 @@ async def upload_location_photo(
             detail="Image must be 10 MB or smaller",
         )
 
-    try:
-        with Image.open(BytesIO(contents)) as image:
-            image_format = image.format
-            image.verify()
-    except (UnidentifiedImageError, OSError) as error:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded file is not a valid image",
-        ) from error
+    contents, image_format = normalize_uploaded_image(contents)
 
-    if image_format in PHONE_IMAGE_FORMATS:
-        try:
-            with Image.open(BytesIO(contents)) as image:
-                converted_image = image.convert("RGB")
-                converted_bytes = BytesIO()
-                converted_image.save(
-                    converted_bytes,
-                    format="JPEG",
-                    quality=90,
-                    optimize=True,
-                )
-                contents = converted_bytes.getvalue()
-                image_format = "JPEG"
-        except OSError as error:
-            raise HTTPException(
-                status_code=400,
-                detail="HEIC image could not be converted",
-            ) from error
-
-    if image_format not in ALLOWED_IMAGE_FORMATS:
+    if len(contents) > MAX_PHOTO_SIZE_BYTES:
         raise HTTPException(
-            status_code=400,
-            detail="Only JPEG, PNG, WebP and HEIC images are allowed",
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Processed image must be 10 MB or smaller",
         )
 
     extension, content_type = ALLOWED_IMAGE_FORMATS[image_format]

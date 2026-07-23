@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -69,6 +70,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=2, max_length=120)
     password: str = Field(min_length=12, max_length=128)
+    accepted_terms: Literal[True]
 
 
 class UserResponse(BaseModel):
