@@ -364,7 +364,8 @@ input:focus, textarea:focus { border-color: #246d5b; box-shadow: 0 0 0 2px rgb(3
   .map-actions { top: 12px; left: 12px; }
   .selection-hint { top: 58px; left: 12px; }
   .side-panel {
-    z-index: 900;
+    /* Leaflet places its zoom and attribution controls on layer 1000. */
+    z-index: 1100;
     top: auto;
     right: 0;
     left: 0;
