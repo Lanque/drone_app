@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class LocationCreate(BaseModel):
@@ -64,3 +64,21 @@ class FlightConditions(BaseModel):
     wind: WindConditions | None
     weather_available: bool
     sun: SunConditions
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    display_name: str = Field(min_length=2, max_length=120)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: EmailStr
+    display_name: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)

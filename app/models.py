@@ -9,10 +9,45 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(
+        String(320),
+        unique=True,
+        index=True,
+    )
+    display_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    google_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    locations: Mapped[list["Location"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
 class Location(Base):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(120))
     latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6))
@@ -29,6 +64,9 @@ class Location(Base):
         back_populates="location",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    owner: Mapped[User] = relationship(
+        back_populates="locations",
     )
 
 

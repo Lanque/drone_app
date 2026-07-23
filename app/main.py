@@ -2,17 +2,37 @@ import asyncio
 import logging
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
+from authlib.integrations.base_client.errors import OAuthError
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, get_db
-from app.models import Location, LocationPhoto
+from app.models import Location, LocationPhoto, User
+from app.oauth import (
+    GOOGLE_OAUTH_ENABLED,
+    OAUTH_SESSION_SECRET,
+    oauth,
+)
 from app.schemas import (
     FlightConditions,
     LocationCreate,
@@ -21,13 +41,30 @@ from app.schemas import (
     LocationUpdate,
     SunConditions,
     WindConditions,
+    UserCreate,
+    UserResponse,
+    LoginRequest,
 )
 from app.services.sun import SunServiceError, get_sun_conditions
 from app.services.weather import WeatherServiceError, get_current_wind
+from app.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 
 app = FastAPI(
     title="Drone Locations API",
     version="0.1.0",
+)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=OAUTH_SESSION_SECRET,
+    session_cookie="oauth_state",
+    max_age=10 * 60,
+    same_site="lax",
+    https_only=False,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,7 +89,10 @@ def build_photo_response(photo: LocationPhoto) -> LocationPhotoResponse:
         content_type=photo.content_type,
         size_bytes=photo.size_bytes,
         caption=photo.caption,
-        url=f"/uploads/locations/{photo.location_id}/{photo.stored_name}",
+        url=(
+            f"/locations/{photo.location_id}"
+            f"/photos/{photo.id}/content"
+        ),
         created_at=photo.created_at,
     )
 
@@ -63,6 +103,21 @@ def get_photo_path(photo: LocationPhoto) -> Path:
         / "locations"
         / str(photo.location_id)
         / Path(photo.stored_name).name
+    )
+
+
+def set_access_token_cookie(
+    response: Response,
+    user_id: int,
+) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=create_access_token(user_id),
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=60 * 60,
+        path="/",
     )
 
 
@@ -84,13 +139,279 @@ def database_health_check() -> dict[str, str]:
 
     return {"status": "ok"}
 
+@app.post(
+    "/auth/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+) -> User:
+    normalized_email = str(user_data.email).strip().lower()
 
-@app.get("/locations", response_model=list[LocationResponse])
-def list_locations(db: Session = Depends(get_db)) -> list[Location]:
-    statement = select(Location).order_by(Location.created_at.desc())
+    existing_user = db.scalar(
+        select(User).where(User.email == normalized_email)
+    )
+
+    if existing_user is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
+        )
+
+    user = User(
+        email=normalized_email,
+        display_name=user_data.display_name.strip(),
+        password_hash=hash_password(user_data.password),
+    )
+
+    db.add(user)
+
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
+        ) from error
+
+    db.refresh(user)
+
+    return user
+
+@app.post(
+    "/auth/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def logout_user(response: Response) -> None:
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        httponly=True,
+        secure=False,
+        samesite="lax",
+    )
+
+
+@app.get("/auth/google")
+async def start_google_login(
+    request: Request,
+) -> RedirectResponse:
+    if not GOOGLE_OAUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google login is not configured",
+        )
+
+    redirect_uri = request.url_for("google_auth_callback")
+
+    return await oauth.google.authorize_redirect(
+        request,
+        redirect_uri,
+    )
+
+
+@app.get(
+    "/auth/google/callback",
+    name="google_auth_callback",
+)
+async def google_auth_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if not GOOGLE_OAUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google login is not configured",
+        )
+
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError:
+        request.session.clear()
+        return RedirectResponse(
+            url="/?auth_error=google",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    request.session.clear()
+    user_info: dict[str, Any] | None = token.get("userinfo")
+
+    if (
+        not user_info
+        or not user_info.get("sub")
+        or not user_info.get("email")
+        or user_info.get("email_verified") is not True
+    ):
+        return RedirectResponse(
+            url="/?auth_error=google_profile",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    google_subject = str(user_info["sub"])
+    normalized_email = str(user_info["email"]).strip().lower()
+
+    user = db.scalar(
+        select(User).where(
+            User.google_subject == google_subject,
+        )
+    )
+
+    if user is None:
+        user = db.scalar(
+            select(User).where(User.email == normalized_email)
+        )
+
+    if user is None:
+        display_name = (
+            str(user_info.get("name") or "").strip()
+            or normalized_email.split("@", maxsplit=1)[0]
+        )
+        user = User(
+            email=normalized_email,
+            display_name=display_name[:120],
+            password_hash=None,
+            google_subject=google_subject,
+        )
+        db.add(user)
+    elif (
+        user.google_subject is not None
+        and user.google_subject != google_subject
+    ):
+        return RedirectResponse(
+            url="/?auth_error=google_account_conflict",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    else:
+        user.google_subject = google_subject
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url="/?auth_error=google_account_conflict",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    db.refresh(user)
+
+    response = RedirectResponse(
+        url="/",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    set_access_token_cookie(response, user.id)
+
+    return response
+
+
+@app.post(
+    "/auth/login",
+    response_model=UserResponse,
+)
+def login_user(
+    login_data: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> User:
+    normalized_email = str(login_data.email).strip().lower()
+
+    user = db.scalar(
+        select(User).where(User.email == normalized_email)
+    )
+
+    if (
+        user is None
+        or user.password_hash is None
+        or not verify_password(
+            login_data.password,
+            user.password_hash,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    set_access_token_cookie(response, user.id)
+
+    return user
+
+def get_current_user(
+    access_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    if access_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+    user_id = decode_access_token(access_token)
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+        )
+
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+        )
+
+    return user
+
+
+def get_owned_location(
+    location_id: int,
+    current_user: User,
+    db: Session,
+) -> Location:
+    statement = select(Location).where(
+        Location.id == location_id,
+        Location.owner_id == current_user.id,
+    )
+    location = db.scalar(statement)
+
+    if location is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Location not found",
+        )
+
+    return location
+
+
+@app.get(
+    "/auth/me",
+    response_model=UserResponse,
+)
+def get_authenticated_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    return current_user
+
+@app.get(
+    "/locations",
+    response_model=list[LocationResponse],
+)
+def list_locations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[Location]:
+    statement = (
+        select(Location)
+        .where(Location.owner_id == current_user.id)
+        .order_by(Location.created_at.desc())
+    )
 
     return list(db.scalars(statement).all())
-
 @app.post(
     "/locations",
     response_model=LocationResponse,
@@ -98,16 +419,19 @@ def list_locations(db: Session = Depends(get_db)) -> list[Location]:
 )
 def create_location(
     location_data: LocationCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Location:
-    location = Location(**location_data.model_dump())
+    location = Location(
+        owner_id=current_user.id,
+        **location_data.model_dump(),
+    )
 
     db.add(location)
     db.commit()
     db.refresh(location)
 
     return location
-
 
 @app.post(
     "/locations/{location_id}/photos",
@@ -118,15 +442,10 @@ async def upload_location_photo(
     location_id: int,
     photo: UploadFile = File(...),
     caption: str | None = Form(default=None, max_length=500),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LocationPhotoResponse:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    get_owned_location(location_id, current_user, db)
 
     contents = await photo.read(MAX_PHOTO_SIZE_BYTES + 1)
     await photo.close()
@@ -205,15 +524,10 @@ async def upload_location_photo(
 )
 def list_location_photos(
     location_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[LocationPhotoResponse]:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    get_owned_location(location_id, current_user, db)
 
     statement = (
         select(LocationPhoto)
@@ -225,6 +539,44 @@ def list_location_photos(
     return [build_photo_response(photo) for photo in photos]
 
 
+@app.get(
+    "/locations/{location_id}/photos/{photo_id}/content",
+    response_class=FileResponse,
+)
+def get_location_photo_content(
+    location_id: int,
+    photo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    get_owned_location(location_id, current_user, db)
+
+    statement = select(LocationPhoto).where(
+        LocationPhoto.id == photo_id,
+        LocationPhoto.location_id == location_id,
+    )
+    photo = db.scalar(statement)
+
+    if photo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Photo not found",
+        )
+
+    photo_path = get_photo_path(photo)
+
+    if not photo_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Photo file not found",
+        )
+
+    return FileResponse(
+        path=photo_path,
+        media_type=photo.content_type,
+    )
+
+
 @app.delete(
     "/locations/{location_id}/photos/{photo_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -232,8 +584,11 @@ def list_location_photos(
 def delete_location_photo(
     location_id: int,
     photo_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    get_owned_location(location_id, current_user, db)
+
     statement = select(LocationPhoto).where(
         LocationPhoto.id == photo_id,
         LocationPhoto.location_id == location_id,
@@ -289,20 +644,19 @@ def delete_location_photo(
 def update_location(
     location_id: int,
     update_data: LocationUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    location = db.get(Location, location_id)
+) -> Location:
+    location = get_owned_location(location_id, current_user, db)
 
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
     fields_to_update = update_data.model_dump(exclude_unset=True)
+
     for field_name, value in fields_to_update.items():
         setattr(location, field_name, value)
+
     db.commit()
     db.refresh(location)
+
     return location
 
 
@@ -312,15 +666,10 @@ def update_location(
 )
 def delete_location(
     location_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    location = get_owned_location(location_id, current_user, db)
 
     db.delete(location)
     db.commit()
@@ -331,15 +680,10 @@ def delete_location(
 )
 async def get_location_weather(
     location_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WindConditions:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    location = get_owned_location(location_id, current_user, db)
 
     try:
         wind_data = await get_current_wind(
@@ -360,15 +704,10 @@ async def get_location_weather(
 )
 async def get_location_sun(
     location_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SunConditions:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    location = get_owned_location(location_id, current_user, db)
 
     try:
         sun_data = await get_sun_conditions(
@@ -389,15 +728,10 @@ async def get_location_sun(
 )
 async def get_flight_conditions(
     location_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FlightConditions:
-    location = db.get(Location, location_id)
-
-    if location is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Location not found",
-        )
+    location = get_owned_location(location_id, current_user, db)
 
     latitude = float(location.latitude)
     longitude = float(location.longitude)
@@ -435,11 +769,6 @@ async def get_flight_conditions(
     )
 frontend_directory = project_directory / "frontend"
 
-app.mount(
-    "/uploads",
-    StaticFiles(directory=uploads_directory),
-    name="uploads",
-)
 app.mount(
     "/",
     StaticFiles(directory=frontend_directory, html=True),

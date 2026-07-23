@@ -12,23 +12,118 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=google-auth-1" />
     <script
       defer
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script defer src="/app.js"></script>
+    <script defer src="/app.js?v=google-auth-1"></script>
   </head>
 
   <body>
+    <section
+      id="auth-screen"
+      class="auth-screen"
+      role="dialog"
+      aria-labelledby="auth-title"
+      hidden
+    >
+      <div class="auth-card">
+        <button
+          id="close-auth-panel"
+          class="auth-close-button"
+          type="button"
+          aria-label="Sulge"
+        >
+          ×
+        </button>
+
+        <a class="brand auth-brand" href="/" aria-label="FrameScout avaleht">
+          <span class="brand__mark" aria-hidden="true">FS</span>
+          <strong>FrameScout</strong>
+        </a>
+
+        <div>
+          <h1 id="auth-title">Logi sisse</h1>
+          <p id="auth-intro">Sinu võttepaigad, fotod ja võtteolud ühes kohas.</p>
+        </div>
+
+        <form id="auth-form">
+          <div id="auth-name-field" class="field auth-name-field" hidden>
+            <label for="auth-display-name">Nimi</label>
+            <input
+              id="auth-display-name"
+              name="display_name"
+              minlength="2"
+              maxlength="120"
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="field">
+            <label for="auth-email">E-post</label>
+            <input
+              id="auth-email"
+              name="email"
+              type="email"
+              maxlength="320"
+              autocomplete="email"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="auth-password">Parool</label>
+            <input
+              id="auth-password"
+              name="password"
+              type="password"
+              minlength="12"
+              maxlength="128"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+
+          <button id="auth-submit" class="save-button" type="submit">
+            Logi sisse
+          </button>
+          <p id="auth-status" class="form-status" role="status"></p>
+        </form>
+
+        <div class="auth-divider"><span>või</span></div>
+
+        <button id="google-login-button" class="google-login-button" type="button">
+          <span class="google-mark" aria-hidden="true">G</span>
+          Jätka Google'iga
+        </button>
+
+        <button id="toggle-auth-mode" class="auth-mode-button" type="button">
+          Loo uus konto
+        </button>
+      </div>
+    </section>
+
     <header class="appbar">
       <a class="brand" href="/" aria-label="FrameScout avaleht">
         <span class="brand__mark" aria-hidden="true">FS</span>
         <strong>FrameScout</strong>
       </a>
-      <span id="location-count" class="location-count">Laadin...</span>
+
+      <div id="guest-actions" class="guest-actions">
+        <button id="open-login" type="button">Logi sisse</button>
+        <button id="open-register" type="button">Loo konto</button>
+      </div>
+
+      <div id="user-actions" class="appbar__account" hidden>
+        <span id="current-user-name" class="current-user-name"></span>
+        <span id="location-count" class="location-count">Laadin...</span>
+        <button id="logout-button" class="logout-button" type="button">
+          Logi välja
+        </button>
+      </div>
     </header>
 
     <main id="workspace" class="workspace">

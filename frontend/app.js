@@ -17,7 +17,28 @@ let isSelectingLocation = false;
 let editingLocationId = null;
 let viewerPhotos = [];
 let viewerPhotoIndex = 0;
+let authMode = "login";
+let authenticatedUser = null;
 
+const authScreen = document.querySelector("#auth-screen");
+const authForm = document.querySelector("#auth-form");
+const authTitle = document.querySelector("#auth-title");
+const authIntro = document.querySelector("#auth-intro");
+const authNameField = document.querySelector("#auth-name-field");
+const authDisplayNameInput = document.querySelector("#auth-display-name");
+const authEmailInput = document.querySelector("#auth-email");
+const authPasswordInput = document.querySelector("#auth-password");
+const authSubmitButton = document.querySelector("#auth-submit");
+const authStatus = document.querySelector("#auth-status");
+const toggleAuthModeButton = document.querySelector("#toggle-auth-mode");
+const closeAuthPanelButton = document.querySelector("#close-auth-panel");
+const googleLoginButton = document.querySelector("#google-login-button");
+const guestActions = document.querySelector("#guest-actions");
+const userActions = document.querySelector("#user-actions");
+const openLoginButton = document.querySelector("#open-login");
+const openRegisterButton = document.querySelector("#open-register");
+const currentUserName = document.querySelector("#current-user-name");
+const logoutButton = document.querySelector("#logout-button");
 const workspace = document.querySelector("#workspace");
 const mapPanel = document.querySelector(".map-panel");
 const sidePanel = document.querySelector("#side-panel");
@@ -69,6 +90,134 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     toast.classList.remove("is-visible");
   }, 3200);
+}
+
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isRegistration = mode === "register";
+
+  authTitle.textContent = isRegistration ? "Loo konto" : "Logi sisse";
+  authIntro.textContent = isRegistration
+    ? "Loo konto, et hoida enda võttepaigad teistest eraldi."
+    : "Sinu võttepaigad, fotod ja võtteolud ühes kohas.";
+  authNameField.hidden = !isRegistration;
+  authDisplayNameInput.required = isRegistration;
+  authPasswordInput.autocomplete = isRegistration
+    ? "new-password"
+    : "current-password";
+  authSubmitButton.textContent = isRegistration
+    ? "Loo konto"
+    : "Logi sisse";
+  toggleAuthModeButton.textContent = isRegistration
+    ? "Mul on juba konto"
+    : "Loo uus konto";
+  authStatus.textContent = "";
+}
+
+
+async function getApiError(response, fallbackMessage) {
+  try {
+    const errorData = await response.json();
+    return errorData.detail || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
+
+async function login(email, password) {
+  const response = await fetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getApiError(response, "Sisselogimine ebaõnnestus."),
+    );
+  }
+
+  return response.json();
+}
+
+
+async function showAuthenticatedApp(user) {
+  authenticatedUser = user;
+  currentUserName.textContent = user.display_name;
+  guestActions.hidden = true;
+  userActions.hidden = false;
+  authScreen.hidden = true;
+
+  window.requestAnimationFrame(() => {
+    map.invalidateSize();
+  });
+
+  await loadLocations();
+}
+
+
+function openAuthenticationPanel(mode = "login") {
+  setAuthMode(mode);
+  authScreen.hidden = false;
+  window.requestAnimationFrame(() => {
+    if (mode === "register") {
+      authDisplayNameInput.focus();
+    } else {
+      authEmailInput.focus();
+    }
+  });
+}
+
+
+function showLoggedOutApp() {
+  authenticatedUser = null;
+  guestActions.hidden = false;
+  userActions.hidden = true;
+  authScreen.hidden = true;
+  currentUserName.textContent = "";
+  locationCount.textContent = "Logi sisse, et näha asukohti";
+  locationsLayer.clearLayers();
+  markersById.clear();
+  closePanel();
+  setAuthMode("login");
+  authPasswordInput.value = "";
+}
+
+
+async function initializeAuthentication() {
+  const queryParameters = new URLSearchParams(window.location.search);
+  const authError = queryParameters.get("auth_error");
+
+  if (authError) {
+    window.history.replaceState({}, "", "/");
+  }
+
+  try {
+    const response = await fetch("/auth/me", {
+      credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+      showLoggedOutApp();
+
+      if (authError) {
+        openAuthenticationPanel("login");
+        authStatus.textContent =
+          "Google'iga sisselogimine ebaõnnestus. Proovi uuesti.";
+      }
+
+      return;
+    }
+
+    await showAuthenticatedApp(await response.json());
+  } catch (error) {
+    console.error(error);
+    showLoggedOutApp();
+    showToast("Serveriga ei õnnestunud ühendust saada.");
+  }
 }
 
 
@@ -719,11 +868,21 @@ locationForm.addEventListener("submit", async (event) => {
 
 
 showLocationsButton.addEventListener("click", () => {
+  if (!authenticatedUser) {
+    openAuthenticationPanel("login");
+    return;
+  }
+
   setSelectionMode(false);
   openPanel("locations");
 });
 
 startAddModeButton.addEventListener("click", () => {
+  if (!authenticatedUser) {
+    openAuthenticationPanel("login");
+    return;
+  }
+
   resetDraft();
   setSelectionMode(true);
 });
@@ -776,7 +935,88 @@ latitudeManualInput.addEventListener("change", updateDraftFromManualCoordinates)
 longitudeManualInput.addEventListener("change", updateDraftFromManualCoordinates);
 
 
-loadLocations();
+toggleAuthModeButton.addEventListener("click", () => {
+  setAuthMode(authMode === "login" ? "register" : "login");
+});
+
+openLoginButton.addEventListener("click", () => {
+  openAuthenticationPanel("login");
+});
+
+openRegisterButton.addEventListener("click", () => {
+  openAuthenticationPanel("register");
+});
+
+closeAuthPanelButton.addEventListener("click", () => {
+  authScreen.hidden = true;
+});
+
+googleLoginButton.addEventListener("click", () => {
+  window.location.assign("/auth/google");
+});
+
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  authSubmitButton.disabled = true;
+  authStatus.textContent = authMode === "register"
+    ? "Loon kontot..."
+    : "Login sisse...";
+
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
+
+  try {
+    if (authMode === "register") {
+      const registrationResponse = await fetch("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          email,
+          display_name: authDisplayNameInput.value.trim(),
+          password,
+        }),
+      });
+
+      if (!registrationResponse.ok) {
+        throw new Error(
+          await getApiError(
+            registrationResponse,
+            "Konto loomine ebaõnnestus.",
+          ),
+        );
+      }
+    }
+
+    const user = await login(email, password);
+    authForm.reset();
+    await showAuthenticatedApp(user);
+  } catch (error) {
+    console.error(error);
+    authStatus.textContent = error.message;
+  } finally {
+    authSubmitButton.disabled = false;
+  }
+});
+
+
+logoutButton.addEventListener("click", async () => {
+  logoutButton.disabled = true;
+
+  try {
+    await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+  } finally {
+    logoutButton.disabled = false;
+    showLoggedOutApp();
+  }
+});
+
+
+initializeAuthentication();
 
 
 closePhotoViewerButton.addEventListener("click", closePhotoViewer);
