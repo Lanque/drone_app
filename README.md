@@ -29,6 +29,10 @@ of a web application: relational data modelling, authenticated REST APIs,
 third-party integrations, responsive frontend work, privacy controls and
 self-hosted deployment.
 
+## Application preview
+
+![FrameScout showing a saved film location, current wind and natural-light windows](docs/images/framescout-app.jpg)
+
 ## Main features
 
 - Interactive Leaflet map with an intentional location placement mode
