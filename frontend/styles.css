@@ -300,17 +300,16 @@ input:focus, textarea:focus { border-color: #246d5b; box-shadow: 0 0 0 2px rgb(3
 
 /* Leaflet popup overrides for responsiveness */
 .leaflet-popup {
-  max-width: calc(100vw - 24px) !important;
+  max-width: calc(100vw - 32px) !important;
 }
 .leaflet-popup-content-wrapper {
   padding: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: 0 4px 18px rgb(0 0 0 / 22%);
 }
 .leaflet-popup-content {
-  margin: 12px 14px !important;
-  width: auto !important;
-  max-width: calc(100vw - 52px);
+  margin: 14px 16px !important;
+  width: min(310px, calc(100vw - 60px)) !important;
   box-sizing: border-box;
 }
 .leaflet-container a.leaflet-popup-close-button {
@@ -322,7 +321,7 @@ input:focus, textarea:focus { border-color: #246d5b; box-shadow: 0 0 0 2px rgb(3
   font-size: 18px;
 }
 
-.location-popup { max-height: min(520px, calc(100dvh - 150px)); overflow-y: auto; padding-right: 4px; color: #20262d; font-size: 14px; }
+.location-popup { max-height: min(440px, calc(100dvh - 170px)); overflow-y: auto; padding-right: 4px; color: #20262d; font-size: 14px; }
 .location-popup h2 { margin: 0 0 7px; font-size: 21px; word-break: break-word; }
 .location-popup p { margin: 7px 0; line-height: 1.45; word-break: break-word; }
 .popup-label { margin-top: 12px !important; color: #69737b; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -330,7 +329,7 @@ input:focus, textarea:focus { border-color: #246d5b; box-shadow: 0 0 0 2px rgb(3
 .condition-card { min-width: 0; padding: 6px 8px; border: 1px solid #d5dadd; border-radius: 2px; background: #f8f9f9; }
 .condition-card small, .condition-card strong { display: block; }
 .condition-card small { color: #69737b; font-size: 9px; text-transform: uppercase; }
-.condition-card strong { margin-top: 3px; font-size: 12px; overflow-wrap: break-word; word-break: break-word; }
+.condition-card strong { margin-top: 3px; font-size: 12px; white-space: nowrap; }
 .photo-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
 .photo-gallery__item { min-width: 0; }
 .photo-thumbnail { display: block; overflow: hidden; width: 100%; height: 72px; padding: 0; border: 1px solid #d5dadd; background: #f8f9f9; cursor: pointer; }

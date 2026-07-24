@@ -654,14 +654,14 @@ function showLocationPhotos(container, photos, onLayoutChange = () => {}) {
 
 function getLocationPopupOptions() {
   const isMobile = window.innerWidth <= 820;
-  const availableWidth = Math.max(220, window.innerWidth - (isMobile ? 32 : 48));
-  const popupWidth = Math.min(380, availableWidth);
+  const availableWidth = Math.max(260, window.innerWidth - (isMobile ? 32 : 48));
+  const popupWidth = Math.min(340, availableWidth);
 
   return {
     maxWidth: popupWidth,
-    minWidth: Math.min(220, popupWidth),
-    autoPanPaddingTopLeft: isMobile ? [12, 64] : [20, 82],
-    autoPanPaddingBottomRight: isMobile ? [12, 12] : [20, 20],
+    minWidth: Math.min(280, popupWidth),
+    autoPanPaddingTopLeft: isMobile ? [16, 96] : [20, 82],
+    autoPanPaddingBottomRight: isMobile ? [16, 16] : [20, 20],
   };
 }
 
@@ -684,20 +684,22 @@ function keepPopupInsideMap(marker) {
 
       const popupBounds = popupElement.getBoundingClientRect();
       const mapBounds = map.getContainer().getBoundingClientRect();
-      const padding = 16;
+      const isMobile = window.innerWidth <= 820;
+      const topPadding = isMobile ? 84 : 20;
+      const sidePadding = 12;
       let horizontalOffset = 0;
       let verticalOffset = 0;
 
-      if (popupBounds.left < mapBounds.left + padding) {
-        horizontalOffset = popupBounds.left - mapBounds.left - padding;
-      } else if (popupBounds.right > mapBounds.right - padding) {
-        horizontalOffset = popupBounds.right - mapBounds.right + padding;
+      if (popupBounds.left < mapBounds.left + sidePadding) {
+        horizontalOffset = popupBounds.left - mapBounds.left - sidePadding;
+      } else if (popupBounds.right > mapBounds.right - sidePadding) {
+        horizontalOffset = popupBounds.right - mapBounds.right + sidePadding;
       }
 
-      if (popupBounds.top < mapBounds.top + padding) {
-        verticalOffset = popupBounds.top - mapBounds.top - padding;
-      } else if (popupBounds.bottom > mapBounds.bottom - padding) {
-        verticalOffset = popupBounds.bottom - mapBounds.bottom + padding;
+      if (popupBounds.top < mapBounds.top + topPadding) {
+        verticalOffset = popupBounds.top - mapBounds.top - topPadding;
+      } else if (popupBounds.bottom > mapBounds.bottom - sidePadding) {
+        verticalOffset = popupBounds.bottom - mapBounds.bottom + sidePadding;
       }
 
       if (horizontalOffset !== 0 || verticalOffset !== 0) {
