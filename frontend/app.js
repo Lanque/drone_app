@@ -362,7 +362,9 @@ function placeDraftMarker(latitude, longitude) {
   }
 
   updateSelectedCoordinates(latitude, longitude);
-  nameInput.focus();
+  if (window.innerWidth > 820) {
+    nameInput.focus();
+  }
 }
 
 
@@ -939,7 +941,9 @@ openManualCoordsButton?.addEventListener("click", () => {
   if (coordDetails) {
     coordDetails.open = true;
   }
-  latitudeManualInput.focus();
+  if (window.innerWidth > 820) {
+    latitudeManualInput.focus();
+  }
 });
 
 reselectOnMapButton?.addEventListener("click", () => {
@@ -1147,5 +1151,20 @@ nextPhotoButton.addEventListener("click", () => {
 photoViewer.addEventListener("click", (event) => {
   if (event.target === photoViewer) {
     closePhotoViewer();
+  }
+});
+
+window.addEventListener("scroll", () => {
+  if (window.scrollY !== 0) {
+    window.scrollTo(0, 0);
+  }
+});
+
+document.addEventListener("focusout", (event) => {
+  if (
+    event.target.tagName === "INPUT" ||
+    event.target.tagName === "TEXTAREA"
+  ) {
+    window.scrollTo(0, 0);
   }
 });
