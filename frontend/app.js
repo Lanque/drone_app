@@ -49,6 +49,7 @@ const showLocationsButton = document.querySelector("#show-locations");
 const startAddModeButton = document.querySelector("#start-add-mode");
 const closePanelButton = document.querySelector("#close-panel");
 const cancelMapSelectionButton = document.querySelector("#cancel-map-selection");
+const openManualCoordsButton = document.querySelector("#open-manual-coords");
 const selectionHint = document.querySelector("#selection-hint");
 const panelTitle = document.querySelector("#panel-title");
 const locationsView = document.querySelector("#locations-view");
@@ -62,6 +63,7 @@ const longitudeInput = document.querySelector("#longitude");
 const latitudeManualInput = document.querySelector("#latitude-manual");
 const longitudeManualInput = document.querySelector("#longitude-manual");
 const selectedLocation = document.querySelector("#selected-location");
+const reselectOnMapButton = document.querySelector("#reselect-on-map");
 const formStatus = document.querySelector("#form-status");
 const noFlyZoneInput = document.querySelector("#no-fly-zone-status");
 const locationCount = document.querySelector("#location-count");
@@ -301,17 +303,22 @@ function resetDraft() {
   submitButton.textContent = "Salvesta";
   selectedLocation.classList.remove("is-selected");
   selectedLocation.textContent = "Vali asukoht kaardil.";
+  if (reselectOnMapButton) {
+    reselectOnMapButton.hidden = true;
+  }
   formStatus.textContent = "";
 }
 
 
-function setSelectionMode(enabled) {
+function setSelectionMode(enabled, autoOpenForm = false) {
   isSelectingLocation = enabled;
   mapPanel.classList.toggle("is-selecting", enabled);
   selectionHint.hidden = !enabled;
 
-  if (enabled) {
+  if (enabled && autoOpenForm) {
     openPanel("form");
+  } else if (!enabled && reselectOnMapButton) {
+    reselectOnMapButton.hidden = true;
   }
 }
 
@@ -640,14 +647,15 @@ function showLocationPhotos(container, photos, onLayoutChange = () => {}) {
 
 
 function getLocationPopupOptions() {
-  const availableWidth = Math.max(260, window.innerWidth - 48);
-  const popupWidth = Math.min(420, availableWidth);
+  const isMobile = window.innerWidth <= 820;
+  const availableWidth = Math.max(220, window.innerWidth - (isMobile ? 32 : 48));
+  const popupWidth = Math.min(380, availableWidth);
 
   return {
     maxWidth: popupWidth,
-    minWidth: Math.min(360, popupWidth),
-    autoPanPaddingTopLeft: [20, 82],
-    autoPanPaddingBottomRight: [20, 20],
+    minWidth: Math.min(220, popupWidth),
+    autoPanPaddingTopLeft: isMobile ? [12, 64] : [20, 82],
+    autoPanPaddingBottomRight: isMobile ? [12, 12] : [20, 20],
   };
 }
 
@@ -910,7 +918,8 @@ startAddModeButton.addEventListener("click", () => {
   }
 
   resetDraft();
-  setSelectionMode(true);
+  closePanel();
+  setSelectionMode(true, false);
 });
 
 closePanelButton.addEventListener("click", () => {
@@ -924,6 +933,19 @@ closePanelButton.addEventListener("click", () => {
 
 cancelMapSelectionButton.addEventListener("click", cancelSelection);
 
+openManualCoordsButton?.addEventListener("click", () => {
+  openPanel("form");
+  const coordDetails = document.querySelector(".coordinate-details");
+  if (coordDetails) {
+    coordDetails.open = true;
+  }
+  latitudeManualInput.focus();
+});
+
+reselectOnMapButton?.addEventListener("click", () => {
+  closePanel();
+});
+
 
 map.on("click", (event) => {
   if (!isSelectingLocation) {
@@ -932,6 +954,10 @@ map.on("click", (event) => {
 
   placeDraftMarker(event.latlng.lat, event.latlng.lng);
   formStatus.textContent = "";
+  if (reselectOnMapButton) {
+    reselectOnMapButton.hidden = false;
+  }
+  openPanel("form");
 });
 
 
@@ -953,10 +979,15 @@ function updateDraftFromManualCoordinates() {
   ) {
     placeDraftMarker(latitude, longitude);
     map.panTo([latitude, longitude]);
+    if (reselectOnMapButton) {
+      reselectOnMapButton.hidden = false;
+    }
   }
 }
 
 
+latitudeManualInput.addEventListener("input", updateDraftFromManualCoordinates);
+longitudeManualInput.addEventListener("input", updateDraftFromManualCoordinates);
 latitudeManualInput.addEventListener("change", updateDraftFromManualCoordinates);
 longitudeManualInput.addEventListener("change", updateDraftFromManualCoordinates);
 

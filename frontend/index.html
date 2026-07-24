@@ -170,8 +170,11 @@
         </nav>
 
         <div id="selection-hint" class="selection-hint" hidden>
-          <strong>Vali võttepaik kaardilt</strong>
-          <button id="cancel-map-selection" type="button">Tühista</button>
+          <span class="selection-hint__text">Vajuta kaardile asukoha märkimiseks</span>
+          <div class="selection-hint__actions">
+            <button id="open-manual-coords" class="selection-hint__button" type="button">Koordinaadid käsitsi</button>
+            <button id="cancel-map-selection" class="selection-hint__button selection-hint__button--cancel" type="button">Tühista</button>
+          </div>
         </div>
       </section>
 
@@ -188,9 +191,14 @@
         </section>
 
         <section id="form-view" hidden>
-          <p id="selected-location" class="selection-status" role="status">
-            Vali asukoht kaardil.
-          </p>
+          <div class="selection-status-wrapper">
+            <p id="selected-location" class="selection-status" role="status">
+              Vali asukoht kaardil.
+            </p>
+            <button id="reselect-on-map" class="reselect-map-button" type="button" hidden>
+              Vali kaardilt uuesti
+            </button>
+          </div>
 
           <form id="location-form">
             <input id="latitude" name="latitude" type="hidden" />
