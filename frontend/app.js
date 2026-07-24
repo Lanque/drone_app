@@ -291,7 +291,11 @@ function openPanel(view) {
 
 
 function closePanel() {
+  if (document.activeElement && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
   workspace.classList.remove("is-panel-open");
+  window.scrollTo(0, 0);
 }
 
 
@@ -947,6 +951,9 @@ openManualCoordsButton?.addEventListener("click", () => {
 });
 
 reselectOnMapButton?.addEventListener("click", () => {
+  if (document.activeElement && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
   closePanel();
 });
 
@@ -1151,20 +1158,5 @@ nextPhotoButton.addEventListener("click", () => {
 photoViewer.addEventListener("click", (event) => {
   if (event.target === photoViewer) {
     closePhotoViewer();
-  }
-});
-
-window.addEventListener("scroll", () => {
-  if (window.scrollY !== 0) {
-    window.scrollTo(0, 0);
-  }
-});
-
-document.addEventListener("focusout", (event) => {
-  if (
-    event.target.tagName === "INPUT" ||
-    event.target.tagName === "TEXTAREA"
-  ) {
-    window.scrollTo(0, 0);
   }
 });
